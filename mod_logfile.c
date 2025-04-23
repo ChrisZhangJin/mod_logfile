@@ -163,7 +163,9 @@ static switch_status_t mod_logfile_rotate(logfile_profile_t *profile)
 			if ((status = switch_file_rename(from_filename, to_filename, pool)) != SWITCH_STATUS_SUCCESS) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Error renaming log from %s to %s [%s]\n",
 								  from_filename, to_filename, strerror(errno));
-				goto end;
+				if (errno != ENOENT) { // merge fs commit 1213217 by yujb
+                                        goto end;
+                                }
 			}
 		}
 
@@ -263,6 +265,8 @@ static switch_status_t process_node(const switch_log_node_t *node, switch_log_le
 	void *val;
 	const void *var;
 	logfile_profile_t *profile;
+    char *sip = NULL, *sip_at = NULL, *p = NULL, *data_copy = NULL;
+    int user_len = 0, k = 0;
 
 	for (hi = switch_core_hash_first(profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 		size_t mask = 0;
@@ -306,14 +310,14 @@ static switch_status_t process_node(const switch_log_node_t *node, switch_log_le
 				free(dup);
 
 			} else {
-				// added by chris zhang
+                // added by chris zhang
                 if (level == SWITCH_LOG_CONSOLE) {
                     sip = strstr(node->data, "sip:");
-                    sip_at = strstr(node->data, "@");
+		    sip_at = sip? strstr(sip, "@"): NULL;
                     if (sip && sip_at) {
                         data_copy = strdup(node->data);
                         sip = strstr(data_copy, "sip:");
-                        sip_at = strstr(data_copy, "@");
+                        sip_at = strstr(sip, "@");
                         user_len = sip_at-sip-4;
                         p = sip+4;
                         for (k=0; k<user_len; k++) {
@@ -326,8 +330,7 @@ static switch_status_t process_node(const switch_log_node_t *node, switch_log_le
                    }
                 } else {
                     mod_logfile_raw_write(profile, node->data);
-                }
-				// added by chris zhang
+                }				
 			}
 		}
 
